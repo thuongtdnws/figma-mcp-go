@@ -27,8 +27,23 @@ So I built something that **doesn’t use the API at all**.
 
 ### 1. Configure your AI tool
 
-Add to your MCP config:
+.vscode/mcp.json
+```json
+{
+	"servers": {
+		"figma-mcp-go": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"@vkhanhqui/figma-mcp-go"
+			]
+		}
+	}
+}
+```
 
+.mcp.json
 ```json
 {
   "mcpServers": {
