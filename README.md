@@ -40,6 +40,23 @@ Install via `npx` — no build step required. Watch the setup video or follow th
 
 ### 1. Configure your AI tool
 
+** Claude Code CLI
+```bash
+claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
+```
+
+**.mcp.json** (Claude and other MCP-compatible tools)
+```json
+{
+  "mcpServers": {
+    "figma-mcp-go": {
+      "command": "npx",
+      "args": ["-y", "@vkhanhqui/figma-mcp-go"]
+    }
+  }
+}
+```
+
 **.vscode/mcp.json** (Cursor / VS Code / GitHub Copilot)
 ```json
 {
@@ -51,18 +68,6 @@ Install via `npx` — no build step required. Watch the setup video or follow th
         "-y",
         "@vkhanhqui/figma-mcp-go"
       ]
-    }
-  }
-}
-```
-
-**.mcp.json** (Claude and other MCP-compatible tools)
-```json
-{
-  "mcpServers": {
-    "figma-mcp-go": {
-      "command": "npx",
-      "args": ["-y", "@vkhanhqui/figma-mcp-go"]
     }
   }
 }
