@@ -162,8 +162,13 @@ func (b *Bridge) Send(ctx context.Context, requestType string, nodeIDs []string,
 
 	// Register before sending to avoid a race where the response
 	// arrives before we store the channel.
-	entry.timer = time.AfterFunc(30*time.Second, func() {
-		bridgeLogger.Printf("→ %s %s timed out after 30s", requestID, requestType)
+	// get_document on large files can take longer; give it more headroom.
+	timeout := 30 * time.Second
+	if requestType == "get_document" {
+		timeout = 60 * time.Second
+	}
+	entry.timer = time.AfterFunc(timeout, func() {
+		bridgeLogger.Printf("→ %s %s timed out after %s", requestID, requestType, timeout)
 		b.mu.Lock()
 		delete(b.pending, requestID)
 		b.mu.Unlock()
