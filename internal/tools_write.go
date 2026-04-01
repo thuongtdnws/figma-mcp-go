@@ -24,6 +24,12 @@ func registerWriteTools(s *server.MCPServer, node *Node) {
 		mcp.WithNumber("paddingBottom", mcp.Description("Auto-layout bottom padding")),
 		mcp.WithNumber("paddingLeft", mcp.Description("Auto-layout left padding")),
 		mcp.WithNumber("itemSpacing", mcp.Description("Auto-layout gap between children")),
+		mcp.WithString("primaryAxisAlignItems", mcp.Description("Main-axis alignment: MIN, CENTER, MAX, or SPACE_BETWEEN")),
+		mcp.WithString("counterAxisAlignItems", mcp.Description("Cross-axis alignment: MIN, CENTER, MAX, or BASELINE")),
+		mcp.WithString("primaryAxisSizingMode", mcp.Description("Main-axis sizing: FIXED or AUTO (hug)")),
+		mcp.WithString("counterAxisSizingMode", mcp.Description("Cross-axis sizing: FIXED or AUTO (hug)")),
+		mcp.WithString("layoutWrap", mcp.Description("Wrap behaviour: NO_WRAP or WRAP")),
+		mcp.WithNumber("counterAxisSpacing", mcp.Description("Gap between wrapped rows/columns (only when layoutWrap is WRAP)")),
 		mcp.WithString("parentId", mcp.Description("Parent node ID in colon format. Defaults to current page.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		params := req.GetArguments()
@@ -274,6 +280,221 @@ func registerWriteTools(s *server.MCPServer, node *Node) {
 			params["parentId"] = pid
 		}
 		resp, err := node.Send(ctx, "clone_node", []string{nodeID}, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("set_auto_layout",
+		mcp.WithDescription("Set or update auto-layout (flex) properties on an existing frame."),
+		mcp.WithString("nodeId",
+			mcp.Required(),
+			mcp.Description("Frame node ID in colon format e.g. '4029:12345'"),
+		),
+		mcp.WithString("layoutMode", mcp.Description("Auto-layout direction: HORIZONTAL, VERTICAL, or NONE")),
+		mcp.WithNumber("paddingTop", mcp.Description("Top padding")),
+		mcp.WithNumber("paddingRight", mcp.Description("Right padding")),
+		mcp.WithNumber("paddingBottom", mcp.Description("Bottom padding")),
+		mcp.WithNumber("paddingLeft", mcp.Description("Left padding")),
+		mcp.WithNumber("itemSpacing", mcp.Description("Gap between children")),
+		mcp.WithString("primaryAxisAlignItems", mcp.Description("Main-axis alignment: MIN, CENTER, MAX, or SPACE_BETWEEN")),
+		mcp.WithString("counterAxisAlignItems", mcp.Description("Cross-axis alignment: MIN, CENTER, MAX, or BASELINE")),
+		mcp.WithString("primaryAxisSizingMode", mcp.Description("Main-axis sizing: FIXED or AUTO (hug)")),
+		mcp.WithString("counterAxisSizingMode", mcp.Description("Cross-axis sizing: FIXED or AUTO (hug)")),
+		mcp.WithString("layoutWrap", mcp.Description("Wrap behaviour: NO_WRAP or WRAP")),
+		mcp.WithNumber("counterAxisSpacing", mcp.Description("Gap between wrapped rows/columns (only when layoutWrap is WRAP)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nodeID, _ := req.GetArguments()["nodeId"].(string)
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "set_auto_layout", []string{nodeID}, params)
+		return renderResponse(resp, err)
+	})
+
+	// ── Write — Styles ───────────────────────────────────────────────────
+
+	s.AddTool(mcp.NewTool("create_paint_style",
+		mcp.WithDescription("Create a new local paint style with a solid fill color."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Style name e.g. 'Brand/Primary'"),
+		),
+		mcp.WithString("color",
+			mcp.Required(),
+			mcp.Description("Fill color as hex e.g. #FF5733"),
+		),
+		mcp.WithString("description", mcp.Description("Optional style description")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_paint_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("create_text_style",
+		mcp.WithDescription("Create a new local text style."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Style name e.g. 'Heading/H1'"),
+		),
+		mcp.WithNumber("fontSize", mcp.Description("Font size in pixels (default 16)")),
+		mcp.WithString("fontFamily", mcp.Description("Font family e.g. Inter (default Inter)")),
+		mcp.WithString("fontStyle", mcp.Description("Font style e.g. Regular, Bold (default Regular)")),
+		mcp.WithString("textDecoration", mcp.Description("NONE, UNDERLINE, or STRIKETHROUGH")),
+		mcp.WithNumber("lineHeightValue", mcp.Description("Line height value")),
+		mcp.WithString("lineHeightUnit", mcp.Description("Line height unit: PIXELS or PERCENT (default PIXELS)")),
+		mcp.WithNumber("letterSpacingValue", mcp.Description("Letter spacing value")),
+		mcp.WithString("letterSpacingUnit", mcp.Description("Letter spacing unit: PIXELS or PERCENT (default PIXELS)")),
+		mcp.WithString("description", mcp.Description("Optional style description")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_text_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("create_effect_style",
+		mcp.WithDescription("Create a new local effect style (drop shadow, inner shadow, or blur)."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Style name e.g. 'Shadow/Card'"),
+		),
+		mcp.WithString("type", mcp.Description("Effect type: DROP_SHADOW (default), INNER_SHADOW, LAYER_BLUR, or BACKGROUND_BLUR")),
+		mcp.WithString("color", mcp.Description("Shadow color as hex e.g. #000000 (default #000000, shadows only)")),
+		mcp.WithNumber("opacity", mcp.Description("Shadow color opacity 0–1 (default 0.25, shadows only)")),
+		mcp.WithNumber("radius", mcp.Description("Blur radius in pixels (default 8 for shadows, 4 for blurs)")),
+		mcp.WithNumber("offsetX", mcp.Description("Shadow X offset in pixels (default 0, shadows only)")),
+		mcp.WithNumber("offsetY", mcp.Description("Shadow Y offset in pixels (default 4, shadows only)")),
+		mcp.WithNumber("spread", mcp.Description("Shadow spread in pixels (default 0, shadows only)")),
+		mcp.WithString("description", mcp.Description("Optional style description")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_effect_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("create_grid_style",
+		mcp.WithDescription("Create a new local layout grid style."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Style name e.g. 'Grid/Desktop'"),
+		),
+		mcp.WithString("pattern", mcp.Description("Grid pattern: GRID (default), COLUMNS, or ROWS")),
+		mcp.WithNumber("count", mcp.Description("Number of columns or rows (COLUMNS/ROWS only, default 12)")),
+		mcp.WithNumber("gutterSize", mcp.Description("Gutter size in pixels (COLUMNS/ROWS only, default 16)")),
+		mcp.WithNumber("offset", mcp.Description("Margin/offset in pixels (COLUMNS/ROWS only, default 0)")),
+		mcp.WithString("alignment", mcp.Description("Alignment: STRETCH (default), CENTER, MIN, or MAX (COLUMNS/ROWS only)")),
+		mcp.WithNumber("sectionSize", mcp.Description("Grid cell size in pixels (GRID only, default 8)")),
+		mcp.WithString("color", mcp.Description("Grid line color as hex e.g. #FF0000 (GRID only, default #FF0000)")),
+		mcp.WithNumber("opacity", mcp.Description("Grid line opacity 0–1 (GRID only, default 0.1)")),
+		mcp.WithString("description", mcp.Description("Optional style description")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_grid_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("update_paint_style",
+		mcp.WithDescription("Update the name, color, or description of an existing paint style."),
+		mcp.WithString("styleId",
+			mcp.Required(),
+			mcp.Description("Paint style ID"),
+		),
+		mcp.WithString("name", mcp.Description("New style name")),
+		mcp.WithString("color", mcp.Description("New fill color as hex e.g. #FF5733")),
+		mcp.WithString("description", mcp.Description("New style description")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "update_paint_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("delete_style",
+		mcp.WithDescription("Delete a style (paint, text, effect, or grid) by its ID."),
+		mcp.WithString("styleId",
+			mcp.Required(),
+			mcp.Description("Style ID to delete"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "delete_style", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	// ── Write — Variables ────────────────────────────────────────────────
+
+	s.AddTool(mcp.NewTool("create_variable_collection",
+		mcp.WithDescription("Create a new local variable collection."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Collection name"),
+		),
+		mcp.WithString("initialModeName", mcp.Description("Name for the initial mode (default 'Mode 1')")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_variable_collection", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("add_variable_mode",
+		mcp.WithDescription("Add a new mode to an existing variable collection (e.g. Light/Dark, Desktop/Mobile)."),
+		mcp.WithString("collectionId",
+			mcp.Required(),
+			mcp.Description("Variable collection ID"),
+		),
+		mcp.WithString("modeName",
+			mcp.Required(),
+			mcp.Description("Name for the new mode"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "add_variable_mode", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("create_variable",
+		mcp.WithDescription("Create a new variable in a collection."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Variable name"),
+		),
+		mcp.WithString("collectionId",
+			mcp.Required(),
+			mcp.Description("Variable collection ID"),
+		),
+		mcp.WithString("type",
+			mcp.Required(),
+			mcp.Description("Variable type: COLOR, FLOAT, STRING, or BOOLEAN"),
+		),
+		mcp.WithString("value", mcp.Description("Initial value for the first mode. COLOR: hex e.g. #FF5733. FLOAT: number e.g. 16. STRING: text. BOOLEAN: true or false.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "create_variable", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("set_variable_value",
+		mcp.WithDescription("Set a variable's value for a specific mode."),
+		mcp.WithString("variableId",
+			mcp.Required(),
+			mcp.Description("Variable ID"),
+		),
+		mcp.WithString("modeId",
+			mcp.Required(),
+			mcp.Description("Mode ID within the collection"),
+		),
+		mcp.WithString("value",
+			mcp.Required(),
+			mcp.Description("Value to set. COLOR: hex e.g. #FF5733. FLOAT: number e.g. 16. STRING: text. BOOLEAN: true or false."),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "set_variable_value", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("delete_variable",
+		mcp.WithDescription("Delete a variable or an entire variable collection. Provide either variableId or collectionId."),
+		mcp.WithString("variableId", mcp.Description("Variable ID to delete")),
+		mcp.WithString("collectionId", mcp.Description("Collection ID to delete (removes all variables in the collection)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := req.GetArguments()
+		resp, err := node.Send(ctx, "delete_variable", nil, params)
 		return renderResponse(resp, err)
 	})
 

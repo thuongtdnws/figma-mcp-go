@@ -144,15 +144,22 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 		if h, ok := params["height"].(float64); ok && h <= 0 {
 			return "height must be positive"
 		}
-		if lm, ok := params["layoutMode"].(string); ok && lm != "" {
-			switch lm {
-			case "HORIZONTAL", "VERTICAL", "NONE":
-			default:
-				return fmt.Sprintf("layoutMode must be HORIZONTAL, VERTICAL, or NONE, got: %s", lm)
-			}
-		}
 		if pid, ok := params["parentId"].(string); ok && pid != "" && !ValidNodeID(pid) {
 			return fmt.Sprintf("parentId must use colon format e.g. 4029:12345, got: %s", pid)
+		}
+		if msg := validateAutoLayoutParams(params); msg != "" {
+			return msg
+		}
+
+	case "set_auto_layout":
+		if len(nodeIDs) == 0 || nodeIDs[0] == "" {
+			return "nodeId is required"
+		}
+		if !ValidNodeID(nodeIDs[0]) {
+			return fmt.Sprintf("nodeId must use colon format e.g. 4029:12345, got: %s", nodeIDs[0])
+		}
+		if msg := validateAutoLayoutParams(params); msg != "" {
+			return msg
 		}
 
 	case "create_rectangle", "create_ellipse":
@@ -283,8 +290,184 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 		if pid, ok := params["parentId"].(string); ok && pid != "" && !ValidNodeID(pid) {
 			return fmt.Sprintf("parentId must use colon format e.g. 4029:12345, got: %s", pid)
 		}
+
+	// ── Style tools ──────────────────────────────────────────────────────────
+
+	case "create_paint_style":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+		if color, _ := params["color"].(string); color == "" {
+			return "color is required (hex string e.g. #FF5733)"
+		}
+
+	case "create_text_style":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+		if td, ok := params["textDecoration"].(string); ok && td != "" {
+			switch td {
+			case "NONE", "UNDERLINE", "STRIKETHROUGH":
+			default:
+				return fmt.Sprintf("textDecoration must be NONE, UNDERLINE, or STRIKETHROUGH, got: %s", td)
+			}
+		}
+		if unit, ok := params["lineHeightUnit"].(string); ok && unit != "" {
+			switch unit {
+			case "PIXELS", "PERCENT":
+			default:
+				return fmt.Sprintf("lineHeightUnit must be PIXELS or PERCENT, got: %s", unit)
+			}
+		}
+		if unit, ok := params["letterSpacingUnit"].(string); ok && unit != "" {
+			switch unit {
+			case "PIXELS", "PERCENT":
+			default:
+				return fmt.Sprintf("letterSpacingUnit must be PIXELS or PERCENT, got: %s", unit)
+			}
+		}
+
+	case "create_effect_style":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+		if t, ok := params["type"].(string); ok && t != "" {
+			switch t {
+			case "DROP_SHADOW", "INNER_SHADOW", "LAYER_BLUR", "BACKGROUND_BLUR":
+			default:
+				return fmt.Sprintf("type must be DROP_SHADOW, INNER_SHADOW, LAYER_BLUR, or BACKGROUND_BLUR, got: %s", t)
+			}
+		}
+
+	case "create_grid_style":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+		if p, ok := params["pattern"].(string); ok && p != "" {
+			switch p {
+			case "GRID", "COLUMNS", "ROWS":
+			default:
+				return fmt.Sprintf("pattern must be GRID, COLUMNS, or ROWS, got: %s", p)
+			}
+		}
+		if a, ok := params["alignment"].(string); ok && a != "" {
+			switch a {
+			case "STRETCH", "CENTER", "MIN", "MAX":
+			default:
+				return fmt.Sprintf("alignment must be STRETCH, CENTER, MIN, or MAX, got: %s", a)
+			}
+		}
+
+	case "update_paint_style":
+		if styleId, _ := params["styleId"].(string); styleId == "" {
+			return "styleId is required"
+		}
+		_, hasName := params["name"]
+		_, hasColor := params["color"]
+		_, hasDesc := params["description"]
+		if !hasName && !hasColor && !hasDesc {
+			return "at least one of name, color, or description is required"
+		}
+
+	case "delete_style":
+		if styleId, _ := params["styleId"].(string); styleId == "" {
+			return "styleId is required"
+		}
+
+	// ── Variable tools ───────────────────────────────────────────────────────
+
+	case "create_variable_collection":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+
+	case "add_variable_mode":
+		if collectionId, _ := params["collectionId"].(string); collectionId == "" {
+			return "collectionId is required"
+		}
+		if modeName, _ := params["modeName"].(string); modeName == "" {
+			return "modeName is required"
+		}
+
+	case "create_variable":
+		if name, _ := params["name"].(string); name == "" {
+			return "name is required"
+		}
+		if collectionId, _ := params["collectionId"].(string); collectionId == "" {
+			return "collectionId is required"
+		}
+		varType, _ := params["type"].(string)
+		switch varType {
+		case "COLOR", "FLOAT", "STRING", "BOOLEAN":
+		default:
+			return fmt.Sprintf("type must be COLOR, FLOAT, STRING, or BOOLEAN, got: %s", varType)
+		}
+
+	case "set_variable_value":
+		if variableId, _ := params["variableId"].(string); variableId == "" {
+			return "variableId is required"
+		}
+		if modeId, _ := params["modeId"].(string); modeId == "" {
+			return "modeId is required"
+		}
+		if _, ok := params["value"]; !ok {
+			return "value is required"
+		}
+
+	case "delete_variable":
+		vid, _ := params["variableId"].(string)
+		cid, _ := params["collectionId"].(string)
+		if vid == "" && cid == "" {
+			return "variableId or collectionId is required"
+		}
 	}
 
+	return ""
+}
+
+func validateAutoLayoutParams(params map[string]interface{}) string {
+	if lm, ok := params["layoutMode"].(string); ok && lm != "" {
+		switch lm {
+		case "HORIZONTAL", "VERTICAL", "NONE":
+		default:
+			return fmt.Sprintf("layoutMode must be HORIZONTAL, VERTICAL, or NONE, got: %s", lm)
+		}
+	}
+	if v, ok := params["primaryAxisAlignItems"].(string); ok && v != "" {
+		switch v {
+		case "MIN", "CENTER", "MAX", "SPACE_BETWEEN":
+		default:
+			return fmt.Sprintf("primaryAxisAlignItems must be MIN, CENTER, MAX, or SPACE_BETWEEN, got: %s", v)
+		}
+	}
+	if v, ok := params["counterAxisAlignItems"].(string); ok && v != "" {
+		switch v {
+		case "MIN", "CENTER", "MAX", "BASELINE":
+		default:
+			return fmt.Sprintf("counterAxisAlignItems must be MIN, CENTER, MAX, or BASELINE, got: %s", v)
+		}
+	}
+	if v, ok := params["primaryAxisSizingMode"].(string); ok && v != "" {
+		switch v {
+		case "FIXED", "AUTO":
+		default:
+			return fmt.Sprintf("primaryAxisSizingMode must be FIXED or AUTO, got: %s", v)
+		}
+	}
+	if v, ok := params["counterAxisSizingMode"].(string); ok && v != "" {
+		switch v {
+		case "FIXED", "AUTO":
+		default:
+			return fmt.Sprintf("counterAxisSizingMode must be FIXED or AUTO, got: %s", v)
+		}
+	}
+	if v, ok := params["layoutWrap"].(string); ok && v != "" {
+		switch v {
+		case "NO_WRAP", "WRAP":
+		default:
+			return fmt.Sprintf("layoutWrap must be NO_WRAP or WRAP, got: %s", v)
+		}
+	}
 	return ""
 }
 

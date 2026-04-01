@@ -3,7 +3,7 @@
 // Every mutation calls figma.commitUndo() so changes are undoable via Cmd/Ctrl+Z.
 
 import { getBounds } from "./serializers";
-import { makeSolidPaint, getParentNode, base64ToBytes } from "./write-helpers";
+import { hexToRgb, makeSolidPaint, getParentNode, base64ToBytes } from "./write-helpers";
 
 export const handleWriteRequest = async (request: any) => {
   switch (request.type) {
@@ -16,14 +16,7 @@ export const handleWriteRequest = async (request: any) => {
       frame.y = p.y != null ? p.y : 0;
       if (p.name) frame.name = p.name;
       if (p.fillColor) frame.fills = [makeSolidPaint(p.fillColor)];
-      if (p.layoutMode && ["HORIZONTAL", "VERTICAL", "NONE"].includes(p.layoutMode)) {
-        frame.layoutMode = p.layoutMode;
-      }
-      if (p.paddingTop != null) frame.paddingTop = p.paddingTop;
-      if (p.paddingRight != null) frame.paddingRight = p.paddingRight;
-      if (p.paddingBottom != null) frame.paddingBottom = p.paddingBottom;
-      if (p.paddingLeft != null) frame.paddingLeft = p.paddingLeft;
-      if (p.itemSpacing != null) frame.itemSpacing = p.itemSpacing;
+      applyAutoLayout(frame, p);
       (parent as any).appendChild(frame);
       figma.commitUndo();
       return {
@@ -251,7 +244,313 @@ export const handleWriteRequest = async (request: any) => {
       };
     }
 
+    case "set_auto_layout": {
+      const p = request.params || {};
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      if (!nodeId) throw new Error("nodeId is required");
+      const node = await figma.getNodeByIdAsync(nodeId);
+      if (!node) throw new Error(`Node not found: ${nodeId}`);
+      if (node.type !== "FRAME") throw new Error(`Node ${nodeId} is not a FRAME`);
+      applyAutoLayout(node, p);
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: node.id, name: node.name },
+      };
+    }
+
+    // ── Variables ─────────────────────────────────────────────────────────
+
+    case "create_variable_collection": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      const collection = figma.variables.createVariableCollection(p.name);
+      if (p.initialModeName && collection.modes.length > 0) {
+        collection.renameMode(collection.modes[0].modeId, p.initialModeName);
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: {
+          id: collection.id,
+          name: collection.name,
+          modes: collection.modes.map((m) => ({ modeId: m.modeId, name: m.name })),
+        },
+      };
+    }
+
+    case "add_variable_mode": {
+      const p = request.params || {};
+      if (!p.collectionId) throw new Error("collectionId is required");
+      if (!p.modeName) throw new Error("modeName is required");
+      const collection = await figma.variables.getVariableCollectionByIdAsync(p.collectionId);
+      if (!collection) throw new Error(`Collection not found: ${p.collectionId}`);
+      const modeId = collection.addMode(p.modeName);
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { collectionId: p.collectionId, modeId, modeName: p.modeName },
+      };
+    }
+
+    case "create_variable": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      if (!p.collectionId) throw new Error("collectionId is required");
+      const validTypes = ["COLOR", "FLOAT", "STRING", "BOOLEAN"];
+      if (!p.type || !validTypes.includes(p.type)) {
+        throw new Error("type is required: COLOR, FLOAT, STRING, or BOOLEAN");
+      }
+      const collection = await figma.variables.getVariableCollectionByIdAsync(p.collectionId);
+      if (!collection) throw new Error(`Collection not found: ${p.collectionId}`);
+      const variable = figma.variables.createVariable(p.name, collection, p.type as VariableResolvedDataType);
+      if (p.value != null && collection.modes.length > 0) {
+        const modeId = collection.modes[0].modeId;
+        variable.setValueForMode(modeId, parseVariableValue(p.type, p.value));
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: {
+          id: variable.id,
+          name: variable.name,
+          resolvedType: variable.resolvedType,
+          collectionId: p.collectionId,
+        },
+      };
+    }
+
+    case "set_variable_value": {
+      const p = request.params || {};
+      if (!p.variableId) throw new Error("variableId is required");
+      if (!p.modeId) throw new Error("modeId is required");
+      if (p.value == null) throw new Error("value is required");
+      const variable = await figma.variables.getVariableByIdAsync(p.variableId);
+      if (!variable) throw new Error(`Variable not found: ${p.variableId}`);
+      variable.setValueForMode(p.modeId, parseVariableValue(variable.resolvedType, p.value));
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { variableId: variable.id, name: variable.name, modeId: p.modeId },
+      };
+    }
+
+    case "delete_variable": {
+      const p = request.params || {};
+      if (p.variableId) {
+        const variable = await figma.variables.getVariableByIdAsync(p.variableId);
+        if (!variable) throw new Error(`Variable not found: ${p.variableId}`);
+        variable.remove();
+        figma.commitUndo();
+        return {
+          type: request.type,
+          requestId: request.requestId,
+          data: { variableId: p.variableId, deleted: true },
+        };
+      } else if (p.collectionId) {
+        const collection = await figma.variables.getVariableCollectionByIdAsync(p.collectionId);
+        if (!collection) throw new Error(`Collection not found: ${p.collectionId}`);
+        collection.remove();
+        figma.commitUndo();
+        return {
+          type: request.type,
+          requestId: request.requestId,
+          data: { collectionId: p.collectionId, deleted: true },
+        };
+      } else {
+        throw new Error("variableId or collectionId is required");
+      }
+    }
+
+    // ── Styles ────────────────────────────────────────────────────────────
+
+    case "create_paint_style": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      if (!p.color) throw new Error("color is required");
+      const style = figma.createPaintStyle();
+      style.name = p.name;
+      style.paints = [makeSolidPaint(p.color)];
+      if (p.description) style.description = p.description;
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: style.id, name: style.name },
+      };
+    }
+
+    case "create_text_style": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      const family = p.fontFamily || "Inter";
+      const fontStyle = p.fontStyle || "Regular";
+      await figma.loadFontAsync({ family, style: fontStyle });
+      const style = figma.createTextStyle();
+      style.name = p.name;
+      style.fontName = { family, style: fontStyle };
+      if (p.fontSize != null) style.fontSize = p.fontSize;
+      if (p.description) style.description = p.description;
+      if (p.textDecoration && p.textDecoration !== "NONE") {
+        style.textDecoration = p.textDecoration;
+      }
+      if (p.lineHeightValue != null) {
+        style.lineHeight = { value: p.lineHeightValue, unit: p.lineHeightUnit || "PIXELS" };
+      }
+      if (p.letterSpacingValue != null) {
+        style.letterSpacing = { value: p.letterSpacingValue, unit: p.letterSpacingUnit || "PIXELS" };
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: style.id, name: style.name },
+      };
+    }
+
+    case "create_effect_style": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      const effectType = p.type || "DROP_SHADOW";
+      let effect: Effect;
+      if (effectType === "LAYER_BLUR") {
+        effect = { type: "LAYER_BLUR", blurType: "NORMAL", radius: p.radius ?? 4, visible: true };
+      } else if (effectType === "BACKGROUND_BLUR") {
+        effect = { type: "BACKGROUND_BLUR", blurType: "NORMAL", radius: p.radius ?? 4, visible: true };
+      } else {
+        // DROP_SHADOW or INNER_SHADOW
+        const { r, g, b, a } = hexToRgb(p.color || "#000000");
+        const alpha = p.opacity != null ? p.opacity : (a !== 1 ? a : 0.25);
+        effect = {
+          type: effectType as "DROP_SHADOW" | "INNER_SHADOW",
+          color: { r, g, b, a: alpha },
+          offset: { x: p.offsetX ?? 0, y: p.offsetY ?? 4 },
+          radius: p.radius ?? 8,
+          spread: p.spread ?? 0,
+          visible: true,
+          blendMode: "NORMAL",
+        };
+      }
+      const style = figma.createEffectStyle();
+      style.name = p.name;
+      style.effects = [effect];
+      if (p.description) style.description = p.description;
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: style.id, name: style.name },
+      };
+    }
+
+    case "create_grid_style": {
+      const p = request.params || {};
+      if (!p.name) throw new Error("name is required");
+      const pattern = p.pattern || "GRID";
+      let grid: LayoutGrid;
+      if (pattern === "COLUMNS" || pattern === "ROWS") {
+        grid = {
+          pattern,
+          count: p.count ?? 12,
+          gutterSize: p.gutterSize ?? 16,
+          offset: p.offset ?? 0,
+          alignment: p.alignment || "STRETCH",
+          visible: true,
+        };
+      } else {
+        // GRID
+        const { r, g, b, a } = hexToRgb(p.color || "#FF0000");
+        grid = {
+          pattern: "GRID",
+          sectionSize: p.sectionSize ?? 8,
+          visible: true,
+          color: { r, g, b, a: p.opacity != null ? p.opacity : (a !== 1 ? a : 0.1) },
+        };
+      }
+      const style = figma.createGridStyle();
+      style.name = p.name;
+      style.layoutGrids = [grid];
+      if (p.description) style.description = p.description;
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: style.id, name: style.name },
+      };
+    }
+
+    case "update_paint_style": {
+      const p = request.params || {};
+      if (!p.styleId) throw new Error("styleId is required");
+      const style = await figma.getStyleByIdAsync(p.styleId);
+      if (!style) throw new Error(`Style not found: ${p.styleId}`);
+      if (style.type !== "PAINT") throw new Error(`Style ${p.styleId} is not a paint style`);
+      if (p.name) style.name = p.name;
+      if (p.color) (style as PaintStyle).paints = [makeSolidPaint(p.color)];
+      if (p.description != null) style.description = p.description;
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: style.id, name: style.name },
+      };
+    }
+
+    case "delete_style": {
+      const p = request.params || {};
+      if (!p.styleId) throw new Error("styleId is required");
+      const style = await figma.getStyleByIdAsync(p.styleId);
+      if (!style) throw new Error(`Style not found: ${p.styleId}`);
+      style.remove();
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { styleId: p.styleId, deleted: true },
+      };
+    }
+
     default:
       return null;
   }
+};
+
+// Apply auto-layout properties to a frame. Only alignment/sizing/wrap props
+// are gated on layoutMode being active — padding and spacing are always valid.
+const applyAutoLayout = (frame: FrameNode, p: any) => {
+  if (p.layoutMode != null) frame.layoutMode = p.layoutMode;
+  if (p.paddingTop != null) frame.paddingTop = p.paddingTop;
+  if (p.paddingRight != null) frame.paddingRight = p.paddingRight;
+  if (p.paddingBottom != null) frame.paddingBottom = p.paddingBottom;
+  if (p.paddingLeft != null) frame.paddingLeft = p.paddingLeft;
+  if (p.itemSpacing != null) frame.itemSpacing = p.itemSpacing;
+  if (frame.layoutMode !== "NONE") {
+    if (p.primaryAxisAlignItems) frame.primaryAxisAlignItems = p.primaryAxisAlignItems;
+    if (p.counterAxisAlignItems) frame.counterAxisAlignItems = p.counterAxisAlignItems;
+    if (p.primaryAxisSizingMode) frame.primaryAxisSizingMode = p.primaryAxisSizingMode;
+    if (p.counterAxisSizingMode) frame.counterAxisSizingMode = p.counterAxisSizingMode;
+    if (p.layoutWrap) frame.layoutWrap = p.layoutWrap;
+    if (p.counterAxisSpacing != null && frame.layoutWrap === "WRAP") {
+      frame.counterAxisSpacing = p.counterAxisSpacing;
+    }
+  }
+};
+
+// Convert a string value to the appropriate Figma variable value type.
+const parseVariableValue = (type: string, value: any): VariableValue => {
+  if (type === "COLOR") {
+    if (typeof value === "string") {
+      const { r, g, b, a } = hexToRgb(value);
+      return { r, g, b, a };
+    }
+    return value as RGBA;
+  }
+  if (type === "FLOAT") return typeof value === "number" ? value : parseFloat(String(value));
+  if (type === "BOOLEAN") return value === true || value === "true";
+  return String(value); // STRING
 };
