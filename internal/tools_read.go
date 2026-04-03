@@ -89,6 +89,7 @@ func registerReadTools(s *server.MCPServer, node *Node) {
 		),
 		mcp.WithArray("types",
 			mcp.Description("Filter by Figma node type e.g. ['TEXT', 'FRAME', 'COMPONENT']"),
+			mcp.WithStringItems(),
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum results to return (default: 50)"),
@@ -131,6 +132,7 @@ func registerReadTools(s *server.MCPServer, node *Node) {
 		mcp.WithArray("types",
 			mcp.Required(),
 			mcp.Description("Node types to find e.g. ['FRAME', 'COMPONENT', 'INSTANCE']"),
+			mcp.WithStringItems(),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nodeID, _ := req.GetArguments()["nodeId"].(string)
@@ -223,6 +225,16 @@ func registerReadTools(s *server.MCPServer, node *Node) {
 		mcp.WithArray("items",
 			mcp.Required(),
 			mcp.Description("List of {nodeId, outputPath, format?, scale?} objects"),
+			mcp.Items(map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"nodeId":     map[string]any{"type": "string", "description": "Node ID in colon format e.g. '4029:12345'"},
+					"outputPath": map[string]any{"type": "string", "description": "File path to write the image to"},
+					"format":     map[string]any{"type": "string", "description": "Export format: PNG, SVG, JPG, or PDF"},
+					"scale":      map[string]any{"type": "number", "description": "Export scale for raster formats"},
+				},
+				"required": []string{"nodeId", "outputPath"},
+			}),
 		),
 		mcp.WithString("format",
 			mcp.Description("Default export format: PNG (default), SVG, JPG, or PDF"),
