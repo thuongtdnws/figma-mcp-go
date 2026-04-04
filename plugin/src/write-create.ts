@@ -103,6 +103,52 @@ export const handleWriteCreateRequest = async (request: any) => {
       };
     }
 
+    case "create_component": {
+      const p = request.params || {};
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      if (!nodeId) throw new Error("nodeId is required");
+      const node = await figma.getNodeByIdAsync(nodeId) as any;
+      if (!node) throw new Error(`Node not found: ${nodeId}`);
+      if (node.type !== "FRAME") throw new Error(`Node ${nodeId} is not a FRAME — only frames can be converted to components`);
+
+      const parent = node.parent as any;
+      const index = parent.children.indexOf(node);
+
+      const component = figma.createComponent();
+      component.name = p.name || node.name;
+      component.resize(node.width, node.height);
+      component.x = node.x;
+      component.y = node.y;
+      component.fills = node.fills as Paint[];
+      component.strokes = node.strokes as Paint[];
+      if (node.cornerRadius != null && node.cornerRadius !== figma.mixed) {
+        component.cornerRadius = node.cornerRadius as number;
+      }
+      if (node.layoutMode && node.layoutMode !== "NONE") {
+        component.layoutMode = node.layoutMode;
+        component.paddingTop = node.paddingTop;
+        component.paddingRight = node.paddingRight;
+        component.paddingBottom = node.paddingBottom;
+        component.paddingLeft = node.paddingLeft;
+        component.itemSpacing = node.itemSpacing;
+        component.primaryAxisAlignItems = node.primaryAxisAlignItems;
+        component.counterAxisAlignItems = node.counterAxisAlignItems;
+      }
+      // Move children from frame into component
+      for (const child of [...node.children]) {
+        component.appendChild(child);
+      }
+      parent.insertChild(index, component);
+      node.remove();
+
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: component.id, name: component.name, type: component.type, bounds: getBounds(component) },
+      };
+    }
+
     default:
       return null;
   }

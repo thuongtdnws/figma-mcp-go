@@ -132,6 +132,42 @@ export const handleWriteModifyRequest = async (request: any) => {
       };
     }
 
+    case "set_opacity": {
+      const p = request.params || {};
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const n = await figma.getNodeByIdAsync(nid) as any;
+        if (!n) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("opacity" in n)) { results.push({ nodeId: nid, error: "Node does not support opacity" }); continue; }
+        n.opacity = p.opacity;
+        results.push({ nodeId: nid, opacity: n.opacity });
+      }
+      figma.commitUndo();
+      return { type: request.type, requestId: request.requestId, data: { results } };
+    }
+
+    case "set_corner_radius": {
+      const p = request.params || {};
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const n = await figma.getNodeByIdAsync(nid) as any;
+        if (!n) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("cornerRadius" in n)) { results.push({ nodeId: nid, error: "Node does not support corner radius" }); continue; }
+        if (p.cornerRadius != null) n.cornerRadius = p.cornerRadius;
+        if (p.topLeftRadius != null) n.topLeftRadius = p.topLeftRadius;
+        if (p.topRightRadius != null) n.topRightRadius = p.topRightRadius;
+        if (p.bottomLeftRadius != null) n.bottomLeftRadius = p.bottomLeftRadius;
+        if (p.bottomRightRadius != null) n.bottomRightRadius = p.bottomRightRadius;
+        results.push({ nodeId: nid, cornerRadius: n.cornerRadius });
+      }
+      figma.commitUndo();
+      return { type: request.type, requestId: request.requestId, data: { results } };
+    }
+
     case "set_auto_layout": {
       const p = request.params || {};
       const nodeId = request.nodeIds && request.nodeIds[0];

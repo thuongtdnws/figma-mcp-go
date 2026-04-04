@@ -167,6 +167,60 @@ func registerWriteModifyTools(s *server.MCPServer, node *Node) {
 		return renderResponse(resp, err)
 	})
 
+	s.AddTool(mcp.NewTool("set_opacity",
+		mcp.WithDescription("Set the opacity of one or more nodes (0 = fully transparent, 1 = fully opaque)."),
+		mcp.WithArray("nodeIds",
+			mcp.Required(),
+			mcp.Description("Node IDs in colon format e.g. ['4029:12345']"),
+			mcp.WithStringItems(),
+		),
+		mcp.WithNumber("opacity",
+			mcp.Required(),
+			mcp.Description("Opacity value between 0 and 1"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, _ := req.GetArguments()["nodeIds"].([]interface{})
+		nodeIDs := toStringSlice(raw)
+		opacity, _ := req.GetArguments()["opacity"].(float64)
+		resp, err := node.Send(ctx, "set_opacity", nodeIDs, map[string]interface{}{"opacity": opacity})
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("set_corner_radius",
+		mcp.WithDescription("Set corner radius on one or more nodes. Provide a uniform cornerRadius or individual per-corner values."),
+		mcp.WithArray("nodeIds",
+			mcp.Required(),
+			mcp.Description("Node IDs in colon format e.g. ['4029:12345']"),
+			mcp.WithStringItems(),
+		),
+		mcp.WithNumber("cornerRadius", mcp.Description("Uniform corner radius applied to all corners")),
+		mcp.WithNumber("topLeftRadius", mcp.Description("Top-left corner radius")),
+		mcp.WithNumber("topRightRadius", mcp.Description("Top-right corner radius")),
+		mcp.WithNumber("bottomLeftRadius", mcp.Description("Bottom-left corner radius")),
+		mcp.WithNumber("bottomRightRadius", mcp.Description("Bottom-right corner radius")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, _ := req.GetArguments()["nodeIds"].([]interface{})
+		nodeIDs := toStringSlice(raw)
+		params := map[string]interface{}{}
+		if v, ok := req.GetArguments()["cornerRadius"].(float64); ok {
+			params["cornerRadius"] = v
+		}
+		if v, ok := req.GetArguments()["topLeftRadius"].(float64); ok {
+			params["topLeftRadius"] = v
+		}
+		if v, ok := req.GetArguments()["topRightRadius"].(float64); ok {
+			params["topRightRadius"] = v
+		}
+		if v, ok := req.GetArguments()["bottomLeftRadius"].(float64); ok {
+			params["bottomLeftRadius"] = v
+		}
+		if v, ok := req.GetArguments()["bottomRightRadius"].(float64); ok {
+			params["bottomRightRadius"] = v
+		}
+		resp, err := node.Send(ctx, "set_corner_radius", nodeIDs, params)
+		return renderResponse(resp, err)
+	})
+
 	s.AddTool(mcp.NewTool("set_auto_layout",
 		mcp.WithDescription("Set or update auto-layout (flex) properties on an existing frame."),
 		mcp.WithString("nodeId",

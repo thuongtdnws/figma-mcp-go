@@ -127,4 +127,22 @@ func registerWriteCreateTools(s *server.MCPServer, node *Node) {
 		resp, err := node.Send(ctx, "import_image", nil, params)
 		return renderResponse(resp, err)
 	})
+
+	s.AddTool(mcp.NewTool("create_component",
+		mcp.WithDescription("Convert an existing FRAME node into a reusable COMPONENT. The frame is replaced in place by the new component."),
+		mcp.WithString("nodeId",
+			mcp.Required(),
+			mcp.Description("FRAME node ID to convert, in colon format e.g. '4029:12345'"),
+		),
+		mcp.WithString("name", mcp.Description("Optional name for the component. Defaults to the frame's current name.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nodeID, _ := req.GetArguments()["nodeId"].(string)
+		nodeID = NormalizeNodeID(nodeID)
+		params := map[string]interface{}{}
+		if name, ok := req.GetArguments()["name"].(string); ok && name != "" {
+			params["name"] = name
+		}
+		resp, err := node.Send(ctx, "create_component", []string{nodeID}, params)
+		return renderResponse(resp, err)
+	})
 }

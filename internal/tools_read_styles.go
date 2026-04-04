@@ -33,4 +33,16 @@ func registerReadStyleTools(s *server.MCPServer, node *Node) {
 		resp, err := node.Send(ctx, "get_annotations", nil, params)
 		return renderResponse(resp, err)
 	})
+
+	s.AddTool(mcp.NewTool("export_tokens",
+		mcp.WithDescription("Export all design tokens (variables and paint styles) as JSON or CSS custom properties. Ideal for bridging Figma variables into your codebase."),
+		mcp.WithString("format", mcp.Description("Output format: json (default) or css")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		params := map[string]interface{}{}
+		if f, ok := req.GetArguments()["format"].(string); ok && f != "" {
+			params["format"] = f
+		}
+		resp, err := node.Send(ctx, "export_tokens", nil, params)
+		return renderResponse(resp, err)
+	})
 }

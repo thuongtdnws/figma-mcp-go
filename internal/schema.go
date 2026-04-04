@@ -139,6 +139,85 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 
 	// ── Write tools ──────────────────────────────────────────────────────────
 
+	case "set_opacity":
+		if len(nodeIDs) == 0 {
+			return "nodeIds is required"
+		}
+		for _, id := range nodeIDs {
+			if !ValidNodeID(id) {
+				return fmt.Sprintf("invalid nodeId: %s — must use colon format e.g. 4029:12345", id)
+			}
+		}
+		op, ok := params["opacity"].(float64)
+		if !ok {
+			return "opacity is required"
+		}
+		if op < 0 || op > 1 {
+			return "opacity must be between 0 and 1"
+		}
+
+	case "set_corner_radius":
+		if len(nodeIDs) == 0 {
+			return "nodeIds is required"
+		}
+		for _, id := range nodeIDs {
+			if !ValidNodeID(id) {
+				return fmt.Sprintf("invalid nodeId: %s — must use colon format e.g. 4029:12345", id)
+			}
+		}
+		_, hasUniform := params["cornerRadius"]
+		_, hasTL := params["topLeftRadius"]
+		_, hasTR := params["topRightRadius"]
+		_, hasBL := params["bottomLeftRadius"]
+		_, hasBR := params["bottomRightRadius"]
+		if !hasUniform && !hasTL && !hasTR && !hasBL && !hasBR {
+			return "at least one of cornerRadius, topLeftRadius, topRightRadius, bottomLeftRadius, or bottomRightRadius is required"
+		}
+
+	case "group_nodes":
+		if len(nodeIDs) < 2 {
+			return "nodeIds must contain at least 2 nodes to group"
+		}
+		for _, id := range nodeIDs {
+			if !ValidNodeID(id) {
+				return fmt.Sprintf("invalid nodeId: %s — must use colon format e.g. 4029:12345", id)
+			}
+		}
+
+	case "ungroup_nodes":
+		if len(nodeIDs) == 0 {
+			return "nodeIds is required and must not be empty"
+		}
+		for _, id := range nodeIDs {
+			if !ValidNodeID(id) {
+				return fmt.Sprintf("invalid nodeId: %s — must use colon format e.g. 4029:12345", id)
+			}
+		}
+
+	case "navigate_to_page":
+		pageID, _ := params["pageId"].(string)
+		pageName, _ := params["pageName"].(string)
+		if pageID == "" && pageName == "" {
+			return "pageId or pageName is required"
+		}
+
+	case "create_component":
+		if len(nodeIDs) == 0 || nodeIDs[0] == "" {
+			return "nodeId is required"
+		}
+		if !ValidNodeID(nodeIDs[0]) {
+			return fmt.Sprintf("nodeId must use colon format e.g. 4029:12345, got: %s", nodeIDs[0])
+		}
+
+	case "export_tokens":
+		if format, ok := params["format"].(string); ok && format != "" {
+			switch format {
+			case "json", "css":
+			default:
+				return fmt.Sprintf("format must be json or css, got: %s", format)
+			}
+		}
+
 	case "create_frame":
 		if w, ok := params["width"].(float64); ok && w <= 0 {
 			return "width must be positive"

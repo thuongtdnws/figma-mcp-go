@@ -660,6 +660,173 @@ func TestValidateRPC_DetachInstance(t *testing.T) {
 	}
 }
 
+func TestValidateRPC_SetOpacity(t *testing.T) {
+	// missing nodeIds
+	if msg := ValidateRPC("set_opacity", nil, map[string]interface{}{"opacity": float64(0.5)}); msg == "" {
+		t.Error("expected error for missing nodeIds")
+	}
+	// invalid nodeId
+	if msg := ValidateRPC("set_opacity", []string{"bad"}, map[string]interface{}{"opacity": float64(0.5)}); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	// missing opacity
+	if msg := ValidateRPC("set_opacity", []string{"1:1"}, nil); msg == "" {
+		t.Error("expected error for missing opacity")
+	}
+	// opacity out of range
+	if msg := ValidateRPC("set_opacity", []string{"1:1"}, map[string]interface{}{"opacity": float64(1.5)}); msg == "" {
+		t.Error("expected error for opacity > 1")
+	}
+	if msg := ValidateRPC("set_opacity", []string{"1:1"}, map[string]interface{}{"opacity": float64(-0.1)}); msg == "" {
+		t.Error("expected error for opacity < 0")
+	}
+	// boundary values
+	for _, op := range []float64{0, 0.5, 1} {
+		if msg := ValidateRPC("set_opacity", []string{"1:1"}, map[string]interface{}{"opacity": op}); msg != "" {
+			t.Errorf("unexpected error for opacity %v: %s", op, msg)
+		}
+	}
+	// multiple nodeIds
+	if msg := ValidateRPC("set_opacity", []string{"1:1", "2:2"}, map[string]interface{}{"opacity": float64(0.5)}); msg != "" {
+		t.Errorf("unexpected error for multiple valid nodeIds: %s", msg)
+	}
+}
+
+func TestValidateRPC_SetCornerRadius(t *testing.T) {
+	// missing nodeIds
+	if msg := ValidateRPC("set_corner_radius", nil, map[string]interface{}{"cornerRadius": float64(8)}); msg == "" {
+		t.Error("expected error for missing nodeIds")
+	}
+	// invalid nodeId
+	if msg := ValidateRPC("set_corner_radius", []string{"bad"}, map[string]interface{}{"cornerRadius": float64(8)}); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	// no radius param provided
+	if msg := ValidateRPC("set_corner_radius", []string{"1:1"}, nil); msg == "" {
+		t.Error("expected error when no radius param provided")
+	}
+	// uniform cornerRadius
+	if msg := ValidateRPC("set_corner_radius", []string{"1:1"}, map[string]interface{}{"cornerRadius": float64(8)}); msg != "" {
+		t.Errorf("unexpected error for cornerRadius: %s", msg)
+	}
+	// per-corner individually
+	for _, param := range []string{"topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"} {
+		if msg := ValidateRPC("set_corner_radius", []string{"1:1"}, map[string]interface{}{param: float64(4)}); msg != "" {
+			t.Errorf("unexpected error for %s: %s", param, msg)
+		}
+	}
+	// mixed per-corner
+	if msg := ValidateRPC("set_corner_radius", []string{"1:1"}, map[string]interface{}{
+		"topLeftRadius": float64(8), "topRightRadius": float64(0),
+		"bottomLeftRadius": float64(8), "bottomRightRadius": float64(0),
+	}); msg != "" {
+		t.Errorf("unexpected error for per-corner radii: %s", msg)
+	}
+}
+
+func TestValidateRPC_GroupNodes(t *testing.T) {
+	// fewer than 2 nodes
+	if msg := ValidateRPC("group_nodes", nil, nil); msg == "" {
+		t.Error("expected error for empty nodeIds")
+	}
+	if msg := ValidateRPC("group_nodes", []string{"1:1"}, nil); msg == "" {
+		t.Error("expected error for single nodeId")
+	}
+	// invalid nodeId
+	if msg := ValidateRPC("group_nodes", []string{"1:1", "bad"}, nil); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	// valid
+	if msg := ValidateRPC("group_nodes", []string{"1:1", "2:2"}, nil); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+	if msg := ValidateRPC("group_nodes", []string{"1:1", "2:2", "3:3"}, nil); msg != "" {
+		t.Errorf("unexpected error for 3 nodeIds: %s", msg)
+	}
+}
+
+func TestValidateRPC_UngroupNodes(t *testing.T) {
+	// missing nodeIds
+	if msg := ValidateRPC("ungroup_nodes", nil, nil); msg == "" {
+		t.Error("expected error for empty nodeIds")
+	}
+	// invalid nodeId
+	if msg := ValidateRPC("ungroup_nodes", []string{"bad-id"}, nil); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	// valid single
+	if msg := ValidateRPC("ungroup_nodes", []string{"1:1"}, nil); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+	// valid multiple
+	if msg := ValidateRPC("ungroup_nodes", []string{"1:1", "2:2"}, nil); msg != "" {
+		t.Errorf("unexpected error for multiple nodeIds: %s", msg)
+	}
+}
+
+func TestValidateRPC_NavigateToPage(t *testing.T) {
+	// neither pageId nor pageName
+	if msg := ValidateRPC("navigate_to_page", nil, nil); msg == "" {
+		t.Error("expected error when neither pageId nor pageName provided")
+	}
+	if msg := ValidateRPC("navigate_to_page", nil, map[string]interface{}{}); msg == "" {
+		t.Error("expected error for empty params")
+	}
+	// pageId provided
+	if msg := ValidateRPC("navigate_to_page", nil, map[string]interface{}{"pageId": "0:1"}); msg != "" {
+		t.Errorf("unexpected error for pageId: %s", msg)
+	}
+	// pageName provided
+	if msg := ValidateRPC("navigate_to_page", nil, map[string]interface{}{"pageName": "Design"}); msg != "" {
+		t.Errorf("unexpected error for pageName: %s", msg)
+	}
+	// both provided — also valid
+	if msg := ValidateRPC("navigate_to_page", nil, map[string]interface{}{"pageId": "0:1", "pageName": "Design"}); msg != "" {
+		t.Errorf("unexpected error when both provided: %s", msg)
+	}
+}
+
+func TestValidateRPC_CreateComponent(t *testing.T) {
+	// missing nodeId
+	if msg := ValidateRPC("create_component", nil, nil); msg == "" {
+		t.Error("expected error for missing nodeId")
+	}
+	if msg := ValidateRPC("create_component", []string{""}, nil); msg == "" {
+		t.Error("expected error for empty nodeId")
+	}
+	// invalid nodeId format
+	if msg := ValidateRPC("create_component", []string{"bad-id"}, nil); msg == "" {
+		t.Error("expected error for hyphen nodeId")
+	}
+	// valid
+	if msg := ValidateRPC("create_component", []string{"1:1"}, nil); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+	if msg := ValidateRPC("create_component", []string{"1:1"}, map[string]interface{}{"name": "MyComponent"}); msg != "" {
+		t.Errorf("unexpected error with name: %s", msg)
+	}
+}
+
+func TestValidateRPC_ExportTokens(t *testing.T) {
+	// no params — valid (defaults to json)
+	if msg := ValidateRPC("export_tokens", nil, nil); msg != "" {
+		t.Errorf("unexpected error for no params: %s", msg)
+	}
+	// valid formats
+	for _, f := range []string{"json", "css"} {
+		if msg := ValidateRPC("export_tokens", nil, map[string]interface{}{"format": f}); msg != "" {
+			t.Errorf("unexpected error for format %s: %s", f, msg)
+		}
+	}
+	// invalid format
+	if msg := ValidateRPC("export_tokens", nil, map[string]interface{}{"format": "yaml"}); msg == "" {
+		t.Error("expected error for invalid format")
+	}
+	if msg := ValidateRPC("export_tokens", nil, map[string]interface{}{"format": "style-dictionary"}); msg == "" {
+		t.Error("expected error for unsupported format")
+	}
+}
+
 func TestValidateAutoLayoutParams_InvalidValues(t *testing.T) {
 	cases := []struct {
 		param string
