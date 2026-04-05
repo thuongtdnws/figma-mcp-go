@@ -47,6 +47,18 @@ Install via `npx` — no build step required. Watch the setup video or follow th
 claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
 ```
 
+**.mcp.json** (Claude and other MCP-compatible tools run with docker at your local)
+```json
+{
+  "mcpServers": {
+    "figma-mcp-go": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "-p", "1994:1994", "figma-mcp-go"]
+    }
+  }
+}
+```
+
 **.mcp.json** (Claude and other MCP-compatible tools)
 ```json
 {
