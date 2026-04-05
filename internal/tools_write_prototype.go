@@ -42,6 +42,7 @@ Example — go back on click:
 		mcp.WithArray("reactions",
 			mcp.Required(),
 			mcp.Description("Array of reaction objects. Each has a trigger and an action."),
+			mcp.Items(map[string]any{"type": "object"}),
 		),
 		mcp.WithString("mode",
 			mcp.Description(`"replace" (default) overwrites all existing reactions; "append" adds to them`),
@@ -68,6 +69,7 @@ Example — go back on click:
 		),
 		mcp.WithArray("indices",
 			mcp.Description("Zero-based indices of reactions to remove. Omit or pass [] to remove all."),
+			mcp.Items(map[string]any{"type": "number"}),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
